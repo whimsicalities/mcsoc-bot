@@ -1,6 +1,9 @@
 import discord
 import os
+from dotenv import load_dotenv
 from stay_awake import stay_awake
+
+load_dotenv()
 
 bot = discord.Client()
 
@@ -13,7 +16,7 @@ async def on_message(message):
   print("Recieved message")
 
   def check_is_dm(msg):
-    return msg.author==author and isinstance(msg.channel, discord.channel.DMChannel);
+    return msg.author==author and isinstance(msg.channel, discord.channel.DMChannel)
 
   if ('!WHITELIST' in message.content.upper()):
     log_channel = bot.get_channel(int(os.getenv('log-channel')))
