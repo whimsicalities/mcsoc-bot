@@ -4,6 +4,7 @@ from discord.ui import Button, View
 from dotenv import load_dotenv
 from stay_awake import stay_awake
 from replit import db
+from functools import partial
 
 load_dotenv()
 BOT_TOKEN = os.getenv("TOKEN")
@@ -23,7 +24,7 @@ async def on_ready():
 async def whitelist_user(ctx, username, email_or_id, email: bool):
     """Whitelist logic"""
     db[str(ctx.author)] = [str(ctx.author), username, email_or_id]
-    
+
     log_channel = bot.get_channel(int(os.getenv("LOG-CHANNEL")))
     rules_channel = bot.get_channel(int(os.getenv("RULES-CHANNEL")))
     info_channel = bot.get_channel(int(os.getenv("INFO-CHANNEL")))
@@ -33,10 +34,13 @@ async def whitelist_user(ctx, username, email_or_id, email: bool):
     accept_button.callback = accept_click
     view.add_item(accept_button)
 
-    reject_button = Button(label="Reject", style=discord.ButtonStyle.red)
-    reject_button.callback = reject_click
-    view.add_item(reject_button)
-    
+    reject_reasons = [ "Not Registered On SU", "Incorrect Minecraft Username", "Incorrect Details", "Other Rejection Reason" ]
+    for reject_reason in reject_reasons:
+      reject_button = Button(label=reject_reason, style=discord.ButtonStyle.red)
+      reject_button_callback_partial = partial(reject_click, reject_reason=reject_reason, user=ctx.author)
+      reject_button.callback = reject_button_callback_partial
+      view.add_item(reject_button)
+
     await log_channel.send(
         f"Discord user: {ctx.author}\n"
         f"Username: `{username}`\n"
@@ -48,8 +52,9 @@ async def whitelist_user(ctx, username, email_or_id, email: bool):
         "when we've manually whitelisted you.\nPlease go read the "
         f"{rules_channel.mention} and {info_channel.mention} channels in the "
         "meantime to make sure you're up to date!")
-  
+
     await ctx.respond(response_msg, ephemeral=True)
+
 
 # Create whitelist command group
 whitelist = bot.create_group(
@@ -78,7 +83,7 @@ async def accept_click(interaction):
     console_channel = bot.get_channel(int(os.getenv("CONSOLE-CHANNEL")))
     await console_channel.send(f"whitelist add {mc_user}")
 
-    guild = interaction.guild 
+    guild = interaction.guild
     # Get Discord member by username
     member = discord.utils.get(
         guild.members,
@@ -97,12 +102,18 @@ async def accept_click(interaction):
     )
 
 
-async def reject_click(interaction):
+async def reject_click(interaction, reject_reason, user):
     # Remove buttons and record result
     await interaction.message.edit(
-        content=interaction.message.content + "```diff\n- Rejected\n```",
-        view=None
+        content=interaction.message.content + "```diff\n- Rejected - " + reject_reason + "\n```",
+        view = None
     )
+    try:
+      user_dm = await bot.create_dm(user)
+      await user_dm.send(f"You were not whitelisted on the UoM Minecraft Society server due to an issue with your application. The issue was: {reject_reason}. Please correct this and send the whitelist command again, or contact a committee member if you need help.")
+    except Exception:
+      print("Failed to send DM")
+  
 
 stay_awake()
 bot.run(BOT_TOKEN)
