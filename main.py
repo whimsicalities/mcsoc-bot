@@ -23,7 +23,7 @@ async def on_ready():
 
 async def whitelist_user(ctx, username, email_or_id, email: bool):
     """Whitelist logic"""
-    db[str(ctx.author)] = [str(ctx.author), username, email_or_id]
+    db[str(ctx.author.mention)] = [str(ctx.author), username, email_or_id]
 
     log_channel = bot.get_channel(int(os.getenv("LOG-CHANNEL")))
     rules_channel = bot.get_channel(int(os.getenv("RULES-CHANNEL")))
@@ -44,7 +44,7 @@ async def whitelist_user(ctx, username, email_or_id, email: bool):
         view.add_item(reject_button)
 
     await log_channel.send(
-        f"Discord user: {ctx.author}\n"
+        f"Discord user: {ctx.author.mention}\n"
         f"Username: `{username}`\n"
         f"Student {'email' if email else 'id'}: {email_or_id}",
         view=view)
@@ -86,13 +86,8 @@ async def accept_click(interaction):
     await console_channel.send(f"whitelist add {mc_user}")
 
     guild = interaction.guild
-    # Get Discord member by username
-    member = discord.utils.get(
-        guild.members,
-        name=username[:username.index("#")],
-        discriminator=username[username.index("#") + 1:]
-    )
-
+    member = await guild.fetch_member(username[2:-1])
+    
     # Add whitelisted role
     whitelisted_role = guild.get_role(int(os.getenv("WHITELISTED-ROLE")))
     await member.add_roles(whitelisted_role)
