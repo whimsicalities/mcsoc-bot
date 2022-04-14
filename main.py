@@ -1,5 +1,6 @@
 import os
 import discord
+from discord.ui import View, Button
 from dotenv import load_dotenv
 from stay_awake import stay_awake
 from replit import db
@@ -14,33 +15,8 @@ intents.members = True
 bot = discord.Bot(intents=intents)
 
 
-class PersistentView(discord.ui.View):
-    def __init__(self, user):
-        super().__init__(timeout=None)
-        self.user = user
-
-    @discord.ui.button(
-        label="Accept",
-        style=discord.ButtonStyle.green,
-        custom_id=f"mcsoc-bot-dev:button:accept:{datetime.now().isoformat()}",
-    )
-    async def accept(self, button: discord.ui.Button,
-                     interaction: discord.Interaction):
-        await accept_click(interaction)
-
-    @discord.ui.button(
-        label="Reject",
-        style=discord.ButtonStyle.red,
-        custom_id=f"mcsoc-bot-dev:button:reject:{datetime.now().isoformat()}",
-    )
-    async def reject(self, button: discord.ui.Button,
-                     interaction: discord.Interaction):
-        await reject_click(interaction, self.user)
-
-
 class SelectRejectionReasonView(discord.ui.View):
-    def __init__(self, user):
-        self.user = user
+    def __init__(self):
         super().__init__()
 
     @discord.ui.select(
@@ -61,9 +37,14 @@ class SelectRejectionReasonView(discord.ui.View):
                                        "```diff\n- Rejected - " +
                                        select.values[0] + "\n```",
                                        view=None)
-
+        
+        msg = interaction.message.content.split()
+        user_id = msg[2]
+        guild = interaction.guild
+        member = await guild.fetch_member(user_id[2:-1])
+    
         try:
-            user_dm = await bot.create_dm(self.user)
+            user_dm = await bot.create_dm(member)
             await user_dm.send(
                 "You were not whitelisted on the UoM Minecraft Society server "
                 "due to an issue with the details you entered. The issue was: "
@@ -74,9 +55,28 @@ class SelectRejectionReasonView(discord.ui.View):
             print("Failed to send DM")
 
 
+def create_view(green_id, red_id):
+    view = View(timeout=None)
+    
+    accept_button = Button(label="Accept", style=discord.ButtonStyle.green, custom_id=green_id)
+    accept_button.callback = accept_click
+    view.add_item(accept_button)
+
+    reject_button = Button(label="Reject", style=discord.ButtonStyle.red, custom_id=red_id)
+    reject_button.callback = reject_click
+    view.add_item(reject_button)
+
+    return view
+
+
 @bot.event
 async def on_ready():
     # wait for everything in this function to make sure nothing gets weird
+
+    # add persistent views from before restart
+    for view in db["views"]:
+        bot.add_view(create_view(view[0], view[1]))
+        
     print(f"Logged on as {bot.user}")
 
 
@@ -88,7 +88,12 @@ async def whitelist_user(ctx, username, email_or_id, email: bool):
     rules_channel = bot.get_channel(int(os.getenv("RULES-CHANNEL")))
     info_channel = bot.get_channel(int(os.getenv("INFO-CHANNEL")))
 
-    view = PersistentView(user=ctx.author)
+    time = datetime.now().isoformat()
+    green_id = f"mcsoc-bot-dev:button:accept:{time}"
+    red_id = f"mcsoc-bot-dev:button:reject:{time}"
+    
+    view = create_view(green_id, red_id)
+    db["views"].append((green_id, red_id))
     bot.add_view(view)
 
     await log_channel.send(
@@ -143,11 +148,17 @@ async def accept_click(interaction):
                                    "```diff\n+ Accepted\n```",
                                    view=None)
 
+    # Remove view from db
+    db["views"] = [view for view in db["views"] if not interaction.custom_id in view]
+
 
 # async def reject_click(interaction, reject_reason, user):
-async def reject_click(interaction, user):
+async def reject_click(interaction):
     await interaction.message.edit(
-        view=SelectRejectionReasonView(user))
+        view=SelectRejectionReasonView()
+    )
+    # Remove view from db
+    db["views"] = [view for view in db["views"] if not interaction.custom_id in view]
 
 
 stay_awake()
