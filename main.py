@@ -41,7 +41,7 @@ class SelectRejectionReasonView(discord.ui.View):
         msg = interaction.message.content.split()
         user_id = msg[2]
         guild = interaction.guild
-        member = await guild.fetch_member(user_id[2:-1])
+        member = await guild.fetch_member(strip_user_id(user_id))
     
         try:
             user_dm = await bot.create_dm(member)
@@ -53,6 +53,11 @@ class SelectRejectionReasonView(discord.ui.View):
                 "you need help.")
         except Exception:
             print("Failed to send DM")
+
+
+def strip_user_id(unstripped):
+  # Discord provides user IDs with <@! and > wrapping them
+  return unstripped[3:-1]
 
 
 def create_view(green_id, red_id):
@@ -137,7 +142,7 @@ async def accept_click(interaction):
     await console_channel.send(f"whitelist add {mc_user}")
 
     guild = interaction.guild
-    member = await guild.fetch_member(user_id[2:-1])
+    member = await guild.fetch_member(strip_user_id(user_id))
 
     # Add whitelisted role
     whitelisted_role = guild.get_role(int(os.getenv("WHITELISTED-ROLE")))
